@@ -419,32 +419,9 @@ func SendEntry(entry *model.Entry, userIntegrations *model.Integration) {
 		}
 	}
 
-	if userIntegrations.WebhookEnabled {
-		var webhookURL string
-		if entry.Feed != nil && entry.Feed.WebhookURL != "" {
-			webhookURL = entry.Feed.WebhookURL
-		} else {
-			webhookURL = userIntegrations.WebhookURL
-		}
-
-		slog.Debug("Sending entry to Webhook",
-			slog.Int64("user_id", userIntegrations.UserID),
-			slog.Int64("entry_id", entry.ID),
-			slog.String("entry_url", entry.URL),
-			slog.String("webhook_url", webhookURL),
-		)
-
-		webhookClient := webhook.NewClient(webhookURL, userIntegrations.WebhookSecret)
-		if err := webhookClient.SendSaveEntryWebhookEvent(entry); err != nil {
-			slog.Error("Unable to send entry to Webhook",
-				slog.Int64("user_id", userIntegrations.UserID),
-				slog.Int64("entry_id", entry.ID),
-				slog.String("entry_url", entry.URL),
-				slog.String("webhook_url", webhookURL),
-				slog.Any("error", err),
-			)
-		}
-	}
+	// Save-entry webhook events are delivered through the persistent outbox
+	// (see EnqueueSaveEntry in webhook_delivery.go); they are never sent
+	// inline here so that retries and crash takeover stay durable.
 
 	if userIntegrations.OmnivoreEnabled {
 		slog.Debug("Sending entry to Omnivore",

@@ -62,6 +62,7 @@ func NewHandler(store *storage.Storage, pool *worker.Pool) http.Handler {
 	mux.HandleFunc("PUT /v1/entries/{entryID}/bookmark", handler.toggleStarredHandler)
 	mux.HandleFunc("PUT /v1/entries/{entryID}/star", handler.toggleStarredHandler)
 	mux.HandleFunc("POST /v1/entries/{entryID}/save", handler.saveEntryHandler)
+	mux.HandleFunc("POST /v1/entries/{entryID}/webhook-delivery/retry", handler.retryWebhookDeliveryHandler)
 	mux.HandleFunc("GET /v1/entries/{entryID}/fetch-content", handler.fetchContentHandler)
 	mux.HandleFunc("PUT /v1/flush-history", handler.flushHistoryHandler)
 	mux.HandleFunc("DELETE /v1/flush-history", handler.flushHistoryHandler)

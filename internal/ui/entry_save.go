@@ -33,7 +33,16 @@ func (h *handler) saveEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go integration.SendEntry(entry, userIntegrations)
+	delivery, err := integration.EnqueueSaveEntry(h.store, entry, userIntegrations)
+	if err != nil {
+		response.JSONServerError(w, r, err)
+		return
+	}
 
-	response.JSONCreated(w, r, map[string]string{"message": "saved"})
+	body := map[string]any{"message": "saved"}
+	if delivery != nil {
+		body["webhook_delivery"] = delivery.View()
+	}
+
+	response.JSONCreated(w, r, body)
 }

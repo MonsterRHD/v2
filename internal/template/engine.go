@@ -49,7 +49,7 @@ func (e *Engine) ParseTemplates() {
 		"edit_category.html":       {"layout.html", "settings_menu.html"},
 		"edit_feed.html":           {"layout.html"},
 		"edit_user.html":           {"layout.html", "settings_menu.html"},
-		"entry.html":               {"layout.html"},
+		"entry.html":               {"layout.html", "webhook_delivery.html"},
 		"feed_entries.html":        {"item_meta.html", "layout.html", "pagination.html"},
 		"feeds.html":               {"feed_list.html", "feed_menu.html", "item_meta.html", "layout.html", "pagination.html"},
 		"history_entries.html":     {"item_meta.html", "layout.html", "pagination.html"},

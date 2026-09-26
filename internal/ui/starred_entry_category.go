@@ -71,6 +71,7 @@ func (h *handler) showStarredCategoryEntryPage(w http.ResponseWriter, r *http.Re
 	}
 
 	view := view.New(h.tpl, r)
+	h.attachEntryWebhookDelivery(user.ID, entry)
 	view.Set("entry", entry)
 	view.Set("prevEntry", prevEntry)
 	view.Set("nextEntry", nextEntry)

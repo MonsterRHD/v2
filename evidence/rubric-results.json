@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "passed": false,
+    "reason": "EnqueueSaveEntry 的 WebhookEnabled 分支读取 config.Opts.WebhookSaveMaxAttempts；定向 integration 测试未初始化 config.Opts，实际 panic 发生在 options.go:1072。"
+  },
+  {
+    "id": 2,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 3,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 4,
+    "passed": false,
+    "reason": "模板定义名为 webhook_delivery，但测试以 common/webhook_delivery.html 调用 ExecuteTemplate；go test 返回 html/template: \"common/webhook_delivery.html\" is undefined。"
+  },
+  {
+    "id": 5,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 6,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 7,
+    "passed": false,
+    "reason": "同一 integration 测试在 webhook 配置路径于 config.Opts.WebhookSaveMaxAttempts 处 panic。"
+  },
+  {
+    "id": 8,
+    "passed": false,
+    "reason": "模板定义名为 webhook_delivery，但模板测试以 common/webhook_delivery.html 调用 ExecuteTemplate；go test 报该名称 undefined。"
+  }
+]

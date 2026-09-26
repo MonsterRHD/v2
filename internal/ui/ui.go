@@ -101,6 +101,7 @@ func Serve(store *storage.Storage, pool *worker.Pool) http.Handler {
 	// Entry pages.
 	mux.HandleFunc("POST /entry/status", handler.updateEntriesStatus)
 	mux.HandleFunc("POST /entry/save/{entryID}", handler.saveEntry)
+	mux.HandleFunc("POST /entry/save/{entryID}/webhook-retry", handler.retryEntryWebhookDelivery)
 	mux.HandleFunc("POST /entry/enclosure/{enclosureID}/save-progression", handler.saveEnclosureProgression)
 	mux.HandleFunc("POST /entry/download/{entryID}", handler.fetchContent)
 	mux.HandleFunc("POST /entry/star/{entryID}", handler.toggleStarred)

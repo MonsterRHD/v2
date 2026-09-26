@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"miniflux.app/v2/internal/crypto"
@@ -20,6 +23,17 @@ const (
 	SaveEntryEventType  = "save_entry"
 )
 
+// Webhook HTTP headers.
+const (
+	SignatureHeader = "X-Miniflux-Signature"
+	EventTypeHeader = "X-Miniflux-Event-Type"
+	EventIDHeader   = "X-Miniflux-Event-ID"
+)
+
+// maxResponseSnippetLength bounds how much of an error response body is kept
+// as a human-readable failure reason.
+const maxResponseSnippetLength = 1024
+
 type Client struct {
 	webhookURL    string
 	webhookSecret string
@@ -29,8 +43,96 @@ func NewClient(webhookURL, webhookSecret string) *Client {
 	return &Client{webhookURL, webhookSecret}
 }
 
-func (c *Client) SendSaveEntryWebhookEvent(entry *model.Entry) error {
-	return c.makeRequest(SaveEntryEventType, &WebhookSaveEntryEvent{
+// AttemptResult describes the HTTP outcome of a single delivery attempt. It is
+// returned even when the response is an error status code, so the dispatcher
+// can distinguish transient from permanent rejections.
+type AttemptResult struct {
+	// StatusCode is the HTTP status code returned by the remote endpoint. It
+	// is zero when no response was received (transport error/timeout).
+	StatusCode int
+	// RetryAfter is the parsed Retry-After delay for 413/429/503 responses.
+	// It is zero when the header is absent or invalid.
+	RetryAfter time.Duration
+	// ResponseSnippet is the truncated response body captured for error
+	// status codes, used as the failure reason shown to the user.
+	ResponseSnippet string
+}
+
+// RequestError is returned when the remote endpoint answers with an HTTP
+// error status code (>= 400).
+type RequestError struct {
+	StatusCode int
+	RetryAfter time.Duration
+}
+
+func (e *RequestError) Error() string {
+	return fmt.Sprintf("webhook: unexpected response status code %d", e.StatusCode)
+}
+
+// IsPermanentStatus reports whether an HTTP status code is an explicit
+// permanent rejection: 4xx responses, except 408 (request timeout) and 429
+// (rate limited), which are retryable.
+func IsPermanentStatus(statusCode int) bool {
+	return statusCode >= 400 && statusCode < 500 &&
+		statusCode != http.StatusRequestTimeout &&
+		statusCode != http.StatusTooManyRequests
+}
+
+// IsTransientStatus reports whether an HTTP status code may succeed on retry:
+// 408, 429 and every 5xx server error.
+func IsTransientStatus(statusCode int) bool {
+	return statusCode == http.StatusRequestTimeout ||
+		statusCode == http.StatusTooManyRequests ||
+		statusCode >= 500
+}
+
+// ParseRetryAfter parses a Retry-After header value expressed either as a
+// number of seconds or an HTTP date. Invalid, zero or past values yield 0.
+func ParseRetryAfter(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds < 0 {
+			return 0
+		}
+
+		return time.Duration(seconds) * time.Second
+	}
+
+	if date, err := http.ParseTime(value); err == nil {
+		delay := time.Until(date)
+		if delay < 0 {
+			return 0
+		}
+
+		return delay
+	}
+
+	return 0
+}
+
+func readResponseSnippet(body io.Reader) string {
+	data, err := io.ReadAll(io.LimitReader(body, maxResponseSnippetLength+1))
+	if err != nil {
+		return ""
+	}
+
+	snippet := strings.TrimSpace(strings.ToValidUTF8(string(data), ""))
+	if len(snippet) > maxResponseSnippetLength {
+		snippet = snippet[:maxResponseSnippetLength] + "…"
+	}
+
+	return snippet
+}
+
+// SendSaveEntryWebhookEvent sends a save_entry event. The eventID is the stable
+// delivery identifier: it is sent unchanged on every attempt (including
+// retries after a crash) so the remote endpoint can deduplicate them.
+func (c *Client) SendSaveEntryWebhookEvent(entry *model.Entry, eventID string) (*AttemptResult, error) {
+	return c.makeRequest(SaveEntryEventType, eventID, &WebhookSaveEntryEvent{
 		EventType: SaveEntryEventType,
 		Entry: &WebhookEntry{
 			ID:          entry.ID,
@@ -93,7 +195,8 @@ func (c *Client) SendNewEntriesWebhookEvent(feed *model.Feed, entries model.Entr
 			Tags:        entry.Tags,
 		})
 	}
-	return c.makeRequest(NewEntriesEventType, &WebhookNewEntriesEvent{
+
+	_, err := c.makeRequest(NewEntriesEventType, "", &WebhookNewEntriesEvent{
 		EventType: NewEntriesEventType,
 		Feed: &WebhookFeed{
 			ID:         feed.ID,
@@ -107,34 +210,48 @@ func (c *Client) SendNewEntriesWebhookEvent(feed *model.Feed, entries model.Entr
 		},
 		Entries: webhookEntries,
 	})
+	return err
 }
 
-func (c *Client) makeRequest(eventType string, payload any) error {
+func (c *Client) makeRequest(eventType, eventID string, payload any) (*AttemptResult, error) {
 	if c.webhookURL == "" {
-		return errors.New(`webhook: missing webhook URL`)
+		return nil, errors.New(`webhook: missing webhook URL`)
 	}
 
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("webhook: unable to encode request body: %v", err)
+		return nil, fmt.Errorf("webhook: unable to encode request body: %v", err)
 	}
 
-	response, err := client.NewRequestBuilder(c.webhookURL).
+	requestBuilder := client.NewRequestBuilder(c.webhookURL).
 		WithMethod(http.MethodPost).
 		WithJSONBody(requestBody).
-		WithHeader("X-Miniflux-Signature", crypto.GenerateSHA256Hmac(c.webhookSecret, requestBody)).
-		WithHeader("X-Miniflux-Event-Type", eventType).
-		Do()
+		WithHeader(SignatureHeader, crypto.GenerateSHA256Hmac(c.webhookSecret, requestBody)).
+		WithHeader(EventTypeHeader, eventType)
+
+	// The save event carries its stable delivery identifier; the bulk
+	// new_entries event keeps its historical headers unchanged.
+	if eventID != "" {
+		requestBuilder = requestBuilder.WithHeader(EventIDHeader, eventID)
+	}
+
+	response, err := requestBuilder.Do()
 	if err != nil {
-		return fmt.Errorf("webhook: %w", err)
+		return nil, fmt.Errorf("webhook: %w", err)
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode >= 400 {
-		return fmt.Errorf("webhook: incorrect response status code %d for url %s", response.StatusCode, c.webhookURL)
+	result := &AttemptResult{
+		StatusCode: response.StatusCode,
+		RetryAfter: ParseRetryAfter(response.Header.Get("Retry-After")),
 	}
 
-	return nil
+	if response.StatusCode >= 400 {
+		result.ResponseSnippet = readResponseSnippet(response.Body)
+		return result, &RequestError{StatusCode: response.StatusCode, RetryAfter: result.RetryAfter}
+	}
+
+	return result, nil
 }
 
 type WebhookFeed struct {

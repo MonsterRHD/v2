@@ -81,6 +81,7 @@ func (h *handler) showSearchEntryPage(w http.ResponseWriter, r *http.Request) {
 	view := view.New(h.tpl, r)
 	view.Set("searchQuery", searchQuery)
 	view.Set("searchUnreadOnly", unreadOnly)
+	h.attachEntryWebhookDelivery(user.ID, entry)
 	view.Set("entry", entry)
 	view.Set("prevEntry", prevEntry)
 	view.Set("nextEntry", nextEntry)

@@ -593,11 +593,67 @@ func NewConfigOptions() *configOptions {
 				valueType:       boolType,
 			},
 			"WEBAUTHN": {
-				parsedBoolValue: false,
-				rawValue:        "0",
-				valueType:       boolType,
+			parsedBoolValue: false,
+			rawValue:        "0",
+			valueType:       boolType,
+		},
+		"WEBHOOK_SAVE_BACKOFF_MULTIPLIER": {
+			parsedIntValue: 2,
+			rawValue:       "2",
+			valueType:      intType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 1)
 			},
-			"WORKER_POOL_SIZE": {
+		},
+		"WEBHOOK_SAVE_CLAIM_LEASE": {
+			parsedDuration: 120 * time.Second,
+			rawValue:       "120",
+			valueType:      secondType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 1)
+			},
+		},
+		"WEBHOOK_SAVE_INITIAL_BACKOFF": {
+			parsedDuration: 60 * time.Second,
+			rawValue:       "60",
+			valueType:      secondType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 1)
+			},
+		},
+		"WEBHOOK_SAVE_MAX_ATTEMPTS": {
+			parsedIntValue: 10,
+			rawValue:       "10",
+			valueType:      intType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 0)
+			},
+		},
+		"WEBHOOK_SAVE_MAX_BACKOFF": {
+			parsedDuration: 3600 * time.Second,
+			rawValue:       "3600",
+			valueType:      secondType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 1)
+			},
+		},
+		"WEBHOOK_SAVE_POLLING_FREQUENCY": {
+			parsedDuration: 10 * time.Second,
+			rawValue:       "10",
+			valueType:      secondType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 1)
+			},
+		},
+		"WEBHOOK_SAVE_RETENTION_DAYS": {
+			parsedDuration: 30 * 24 * time.Hour,
+			rawValue:       "30",
+			valueType:      dayType,
+			validator: func(rawValue string) error {
+				return validateGreaterOrEqualThan(rawValue, 1)
+			},
+		},
+		"WORKER_POOL_SIZE": {
 				parsedIntValue: 16,
 				rawValue:       "16",
 				valueType:      intType,
@@ -998,6 +1054,34 @@ func (c *configOptions) Watchdog() bool {
 
 func (c *configOptions) WebAuthn() bool {
 	return c.options["WEBAUTHN"].parsedBoolValue
+}
+
+func (c *configOptions) WebhookSaveBackoffMultiplier() int {
+	return c.options["WEBHOOK_SAVE_BACKOFF_MULTIPLIER"].parsedIntValue
+}
+
+func (c *configOptions) WebhookSaveClaimLease() time.Duration {
+	return c.options["WEBHOOK_SAVE_CLAIM_LEASE"].parsedDuration
+}
+
+func (c *configOptions) WebhookSaveInitialBackoff() time.Duration {
+	return c.options["WEBHOOK_SAVE_INITIAL_BACKOFF"].parsedDuration
+}
+
+func (c *configOptions) WebhookSaveMaxAttempts() int {
+	return c.options["WEBHOOK_SAVE_MAX_ATTEMPTS"].parsedIntValue
+}
+
+func (c *configOptions) WebhookSaveMaxBackoff() time.Duration {
+	return c.options["WEBHOOK_SAVE_MAX_BACKOFF"].parsedDuration
+}
+
+func (c *configOptions) WebhookSavePollingFrequency() time.Duration {
+	return c.options["WEBHOOK_SAVE_POLLING_FREQUENCY"].parsedDuration
+}
+
+func (c *configOptions) WebhookSaveRetention() time.Duration {
+	return c.options["WEBHOOK_SAVE_RETENTION_DAYS"].parsedDuration
 }
 
 func (c *configOptions) WorkerPoolSize() int {

@@ -32,8 +32,11 @@ func startDaemon(store *storage.Storage) {
 
 	pool := worker.NewPool(store, config.Opts.WorkerPoolSize())
 
+	var schedulerCancel context.CancelFunc
 	if config.Opts.HasSchedulerService() && !config.Opts.HasMaintenanceMode() {
-		runScheduler(store, pool)
+		schedulerCtx, cancelScheduler := context.WithCancel(context.Background())
+		schedulerCancel = cancelScheduler
+		runScheduler(store, pool, schedulerCtx)
 	}
 
 	var httpServers []*http.Server
@@ -98,6 +101,11 @@ func startDaemon(store *storage.Storage) {
 				slog.Debug("All HTTP servers shut down.")
 			} else {
 				slog.Debug("No HTTP servers to shut down.")
+			}
+
+			if schedulerCancel != nil {
+				slog.Debug("Stopping background scheduler...")
+				schedulerCancel()
 			}
 
 			slog.Debug("Shutting down worker pool...")

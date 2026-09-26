@@ -444,10 +444,6 @@ func (h *feverHandler) handleWriteItems(w http.ResponseWriter, r *http.Request) 
 			slog.Int64("user_id", userID),
 			slog.Int64("entry_id", entryID),
 		)
-		if err := h.store.ToggleStarred(userID, entryID); err != nil {
-			response.JSONServerError(w, r, err)
-			return
-		}
 
 		settings, err := h.store.Integration(userID)
 		if err != nil {
@@ -455,15 +451,27 @@ func (h *feverHandler) handleWriteItems(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		go func() {
-			integration.SendEntry(entry, settings)
-		}()
+		// The starred state and the persistent webhook delivery are
+		// committed together; other save integrations are triggered.
+		if err := integration.SyncStarredSaveEntries(h.store, model.Entries{entry}, true, settings); err != nil {
+			response.JSONServerError(w, r, err)
+			return
+		}
 	case "unsaved":
 		slog.Debug("[Fever] Mark entry as unsaved",
 			slog.Int64("user_id", userID),
 			slog.Int64("entry_id", entryID),
 		)
-		if err := h.store.ToggleStarred(userID, entryID); err != nil {
+
+		settings, err := h.store.Integration(userID)
+		if err != nil {
+			response.JSONServerError(w, r, err)
+			return
+		}
+
+		// Never-sent webhook deliveries are revoked; deliveries already on
+		// the wire keep their event identifier and are not masked.
+		if err := integration.SyncStarredSaveEntries(h.store, model.Entries{entry}, false, settings); err != nil {
 			response.JSONServerError(w, r, err)
 			return
 		}

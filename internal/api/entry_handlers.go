@@ -39,6 +39,10 @@ func (h *handler) getEntryFromBuilder(w http.ResponseWriter, r *http.Request, b 
 	entry.Content = mediaproxy.RewriteDocumentWithAbsoluteProxyURL(entry.Content)
 	entry.Enclosures.ProxifyEnclosureURL(config.Opts.MediaProxyMode(), config.Opts.MediaProxyResourceTypes())
 
+	if !h.attachWebhookDeliveries(w, r, request.UserID(r), model.Entries{entry}) {
+		return
+	}
+
 	response.JSON(w, r, entry)
 }
 
@@ -206,6 +210,10 @@ func (h *handler) findEntries(w http.ResponseWriter, r *http.Request, feedID int
 		entries[i].Enclosures.ProxifyEnclosureURL(config.Opts.MediaProxyMode(), config.Opts.MediaProxyResourceTypes())
 	}
 
+	if !h.attachWebhookDeliveries(w, r, userID, entries) {
+		return
+	}
+
 	response.JSON(w, r, &entriesResponse{Total: count, Entries: entries})
 }
 
@@ -284,9 +292,18 @@ func (h *handler) saveEntryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go integration.SendEntry(entry, settings)
+	delivery, err := integration.EnqueueSaveEntry(h.store, entry, settings)
+	if err != nil {
+		response.JSONServerError(w, r, err)
+		return
+	}
 
-	response.JSONAccepted(w, r)
+	body := map[string]any{}
+	if delivery != nil {
+		body["webhook_delivery"] = delivery.View()
+	}
+
+	response.JSONAccepted(w, r, body)
 }
 
 func (h *handler) updateEntryHandler(w http.ResponseWriter, r *http.Request) {
@@ -345,6 +362,10 @@ func (h *handler) updateEntryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.UpdateEntryTitleAndContent(entry); err != nil {
 		response.JSONServerError(w, r, err)
+		return
+	}
+
+	if !h.attachWebhookDeliveries(w, r, loggedUserID, model.Entries{entry}) {
 		return
 	}
 

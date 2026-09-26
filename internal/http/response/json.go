@@ -43,11 +43,45 @@ func JSONCreated(w http.ResponseWriter, r *http.Request, body any) {
 		Write()
 }
 
-// JSONAccepted sends an accepted response to the client.
-func JSONAccepted(w http.ResponseWriter, r *http.Request) {
-	NewBuilder(w, r).
+// JSONAccepted sends an accepted response to the client. An optional JSON body
+// can be provided to return information about the accepted request.
+func JSONAccepted(w http.ResponseWriter, r *http.Request, args ...any) {
+	builder := NewBuilder(w, r).
 		WithStatus(http.StatusAccepted).
+		WithHeader("Content-Type", jsonContentTypeHeader)
+
+	if len(args) > 0 && args[0] != nil {
+		responseBody, err := json.Marshal(args[0])
+		if err != nil {
+			JSONServerError(w, r, err)
+			return
+		}
+
+		builder.WithBodyAsBytes(responseBody)
+	}
+
+	builder.Write()
+}
+
+// JSONConflict sends a conflict response to the client.
+func JSONConflict(w http.ResponseWriter, r *http.Request, err error) {
+	slog.Warn(http.StatusText(http.StatusConflict),
+		slog.Any("error", err),
+		slog.String("client_ip", request.ClientIP(r)),
+		slog.Group("request",
+			slog.String("method", r.Method),
+			slog.String("uri", r.RequestURI),
+			slog.String("user_agent", r.UserAgent()),
+		),
+		slog.Group("response",
+			slog.Int("status_code", http.StatusConflict),
+		),
+	)
+
+	NewBuilder(w, r).
+		WithStatus(http.StatusConflict).
 		WithHeader("Content-Type", jsonContentTypeHeader).
+		WithBodyAsBytes(generateJSONError(err)).
 		Write()
 }
 

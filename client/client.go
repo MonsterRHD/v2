@@ -1097,6 +1097,59 @@ func (c *Client) SaveEntryContext(ctx context.Context, entryID int64) error {
 	return err
 }
 
+// SaveEntryWithDelivery sends an entry to a third-party service and returns
+// the webhook delivery status when a webhook integration is enabled (nil
+// otherwise).
+func (c *Client) SaveEntryWithDelivery(entryID int64) (*WebhookDelivery, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.SaveEntryWithDeliveryContext(ctx, entryID)
+}
+
+// SaveEntryWithDeliveryContext is like SaveEntryWithDelivery but accepts a
+// custom context.
+func (c *Client) SaveEntryWithDeliveryContext(ctx context.Context, entryID int64) (*WebhookDelivery, error) {
+	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/entries/%d/save", entryID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var result struct {
+		Delivery *WebhookDelivery `json:"webhook_delivery"`
+	}
+	if err := json.NewDecoder(body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return result.Delivery, nil
+}
+
+// RetryWebhookDelivery re-queues a failed save-entry webhook delivery,
+// preserving its stable event identifier.
+func (c *Client) RetryWebhookDelivery(entryID int64) (*WebhookDelivery, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.RetryWebhookDeliveryContext(ctx, entryID)
+}
+
+// RetryWebhookDeliveryContext is like RetryWebhookDelivery but accepts a
+// custom context.
+func (c *Client) RetryWebhookDeliveryContext(ctx context.Context, entryID int64) (*WebhookDelivery, error) {
+	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/entries/%d/webhook-delivery/retry", entryID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var delivery *WebhookDelivery
+	if err := json.NewDecoder(body).Decode(&delivery); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return delivery, nil
+}
+
 // FetchEntryOriginalContent fetches the original content of an entry using the scraper.
 func (c *Client) FetchEntryOriginalContent(entryID int64) (string, error) {
 	ctx, cancel := withDefaultTimeout()

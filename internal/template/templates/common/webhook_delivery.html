@@ -1,0 +1,30 @@
+{{ define "webhook_delivery" }}
+{{ if .entry.WebhookDelivery }}
+<li>
+    <div class="webhook-delivery webhook-delivery-{{ .entry.WebhookDelivery.Status }}" data-webhook-delivery-status="{{ .entry.WebhookDelivery.Status }}">
+        <span class="webhook-delivery-status">
+            {{ if eq .entry.WebhookDelivery.Status "pending" }}{{ icon "save" }} {{ t "entry.webhook_delivery.status.pending" }}
+            {{ else if eq .entry.WebhookDelivery.Status "in_flight" }}{{ icon "refresh" }} {{ t "entry.webhook_delivery.status.in_flight" }}
+            {{ else if eq .entry.WebhookDelivery.Status "retry_waiting" }}{{ icon "refresh" }} {{ t "entry.webhook_delivery.status.retry_waiting" }}
+            {{ else if eq .entry.WebhookDelivery.Status "succeeded" }}{{ icon "save" }} {{ t "entry.webhook_delivery.status.succeeded" }}
+            {{ else if eq .entry.WebhookDelivery.Status "failed" }}{{ t "entry.webhook_delivery.status.failed" }}
+            {{ else if eq .entry.WebhookDelivery.Status "canceled" }}{{ t "entry.webhook_delivery.status.canceled" }}
+            {{ end }}
+        </span>
+        {{ if eq .entry.WebhookDelivery.Status "retry_waiting" }}
+        <span class="webhook-delivery-next">{{ t "entry.webhook_delivery.next_attempt" }} {{ elapsed .user.Timezone .entry.WebhookDelivery.NextAttemptAt }}</span>
+        {{ end }}
+        {{ if eq .entry.WebhookDelivery.Status "failed" }}
+        <span class="webhook-delivery-error" title="{{ .entry.WebhookDelivery.LastError }}">{{ .entry.WebhookDelivery.LastError }}</span>
+        <button
+            type="button"
+            class="page-button"
+            data-webhook-retry="true"
+            data-retry-url="{{ routePath "/entry/save/%d/webhook-retry" .entry.ID }}"
+            data-label-loading="{{ t "entry.state.saving" }}"
+            >{{ icon "refresh" }}<span class="icon-label">{{ t "entry.webhook_delivery.retry.label" }}</span></button>
+        {{ end }}
+    </div>
+</li>
+{{ end }}
+{{ end }}

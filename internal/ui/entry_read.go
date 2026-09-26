@@ -58,6 +58,7 @@ func (h *handler) showReadEntryPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := view.New(h.tpl, r)
+	h.attachEntryWebhookDelivery(user.ID, entry)
 	view.Set("entry", entry)
 	view.Set("prevEntry", prevEntry)
 	view.Set("nextEntry", nextEntry)

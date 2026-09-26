@@ -89,6 +89,7 @@
                         >{{ icon "save" }}<span class="icon-label">{{ t "entry.save.label" }}</span></button>
                 </li>
                 {{ end }}
+                {{ template "webhook_delivery" . }}
                 {{ if .entry.ShareCode }}
                 <li>
                     <a href="{{ routePath "/share/%s" .entry.ShareCode }}"

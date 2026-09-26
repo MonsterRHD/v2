@@ -55,4 +55,14 @@ func runCleanupTasks(store *storage.Storage) {
 			slog.Int64("orphan_icons_removed", nbIcons),
 		)
 	}
+
+	cutoff := time.Now().Add(-config.Opts.WebhookSaveRetention())
+	if nbDeliveries, err := store.CleanOldWebhookDeliveries(cutoff); err != nil {
+		slog.Error("Unable to clean old webhook save deliveries", slog.Any("error", err))
+	} else {
+		slog.Info("Old webhook save deliveries cleanup completed",
+			slog.Int64("webhook_deliveries_removed", nbDeliveries),
+			slog.Duration("retention", config.Opts.WebhookSaveRetention()),
+		)
+	}
 }

@@ -723,6 +723,31 @@ function handleSaveEntryAction(element = null) {
 }
 
 /**
+ * Retry a failed save-entry webhook delivery.
+ *
+ * The delivery keeps its stable event identifier server-side, so retrying is
+ * safe if the remote endpoint actually processed the previous attempt.
+ *
+ * @param {Element} element - The retry button.
+ */
+function handleWebhookDeliveryRetryAction(element) {
+    const retryButton = element.closest("[data-webhook-retry]");
+    if (!retryButton) return;
+
+    setButtonToLoadingState(retryButton);
+
+    sendPOSTRequest(retryButton.dataset.retryUrl)
+        .then((response) => {
+            if (response.ok) {
+                window.location.reload();
+            }
+        })
+        .catch(() => {
+            window.location.reload();
+        });
+}
+
+/**
  * Handle starring an entry.
  *
  * @param {Element} element - The element that triggered the star action.
@@ -1248,6 +1273,7 @@ function initializeTouchHandler() {
 function initializeClickHandlers() {
     // Entry actions
     onClick(":is(a, button)[data-save-entry]", (event) => handleSaveEntryAction(event.target));
+    onClick(":is(a, button)[data-webhook-retry]", (event) => handleWebhookDeliveryRetryAction(event.target));
     onClick(":is(a, button)[data-toggle-starred]", (event) => handleStarAction(event.target));
     onClick(":is(a, button)[data-toggle-status]", (event) => handleEntryStatus("next", event.target));
     onClick(":is(a, button)[data-fetch-content-entry]", handleFetchOriginalContentAction);

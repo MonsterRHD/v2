@@ -88,6 +88,7 @@ func (h *handler) showUnreadCategoryEntryPage(w http.ResponseWriter, r *http.Req
 	}
 
 	view := view.New(h.tpl, r)
+	h.attachEntryWebhookDelivery(user.ID, entry)
 	view.Set("entry", entry)
 	view.Set("prevEntry", prevEntry)
 	view.Set("nextEntry", nextEntry)

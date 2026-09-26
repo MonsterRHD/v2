@@ -45,6 +45,11 @@ type Entry struct {
 	Enclosures  EnclosureList `json:"enclosures"`
 	Feed        *Feed         `json:"feed,omitempty"`
 	Tags        []string      `json:"tags"`
+
+	// WebhookDelivery is populated only by API/UI read paths for users that
+	// have a save-entry webhook delivery record for the entry. It is never
+	// persisted on the entry itself.
+	WebhookDelivery *WebhookDeliveryView `json:"webhook_delivery,omitempty"`
 }
 
 func NewEntry() *Entry {

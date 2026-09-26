@@ -280,6 +280,22 @@ type Entry struct {
 	UserID      int64      `json:"user_id"`
 	FeedID      int64      `json:"feed_id"`
 	Starred     bool       `json:"starred"`
+
+	WebhookDelivery *WebhookDelivery `json:"webhook_delivery,omitempty"`
+}
+
+// WebhookDelivery is the delivery status of a save-entry webhook event.
+type WebhookDelivery struct {
+	EventID        string     `json:"event_id"`
+	Status         string     `json:"status"`
+	Attempts       int        `json:"attempts"`
+	MaxAttempts    int        `json:"max_attempts"`
+	LastHTTPStatus *int       `json:"last_http_status,omitempty"`
+	LastError      string     `json:"last_error,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastAttemptAt  *time.Time `json:"last_attempt_at,omitempty"`
+	NextAttemptAt  time.Time  `json:"next_attempt_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // EntryModificationRequest represents a request to modify an entry.

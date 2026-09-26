@@ -2088,3 +2088,99 @@ func TestValidateSchedulerEntryFrequencyMinLessThanMax(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 }
+
+func TestWebhookSaveOptionsDefault(t *testing.T) {
+	configParser := NewConfigParser()
+
+	if configParser.options.WebhookSavePollingFrequency().Seconds() != 10 {
+		t.Fatalf("Expected WEBHOOK_SAVE_POLLING_FREQUENCY to be 10 seconds by default")
+	}
+
+	if configParser.options.WebhookSaveInitialBackoff().Seconds() != 60 {
+		t.Fatalf("Expected WEBHOOK_SAVE_INITIAL_BACKOFF to be 60 seconds by default")
+	}
+
+	if configParser.options.WebhookSaveMaxBackoff().Seconds() != 3600 {
+		t.Fatalf("Expected WEBHOOK_SAVE_MAX_BACKOFF to be 3600 seconds by default")
+	}
+
+	if configParser.options.WebhookSaveBackoffMultiplier() != 2 {
+		t.Fatalf("Expected WEBHOOK_SAVE_BACKOFF_MULTIPLIER to be 2 by default")
+	}
+
+	if configParser.options.WebhookSaveMaxAttempts() != 10 {
+		t.Fatalf("Expected WEBHOOK_SAVE_MAX_ATTEMPTS to be 10 by default")
+	}
+
+	if configParser.options.WebhookSaveClaimLease().Seconds() != 120 {
+		t.Fatalf("Expected WEBHOOK_SAVE_CLAIM_LEASE to be 120 seconds by default")
+	}
+
+	if configParser.options.WebhookSaveRetention().Hours() != 24*30 {
+		t.Fatalf("Expected WEBHOOK_SAVE_RETENTION_DAYS to be 30 days by default")
+	}
+}
+
+func TestWebhookSaveOptionsCustomParsing(t *testing.T) {
+	configParser := NewConfigParser()
+
+	if err := configParser.parseLines([]string{
+		"WEBHOOK_SAVE_POLLING_FREQUENCY=5",
+		"WEBHOOK_SAVE_INITIAL_BACKOFF=15",
+		"WEBHOOK_SAVE_MAX_BACKOFF=900",
+		"WEBHOOK_SAVE_BACKOFF_MULTIPLIER=3",
+		"WEBHOOK_SAVE_MAX_ATTEMPTS=0",
+		"WEBHOOK_SAVE_CLAIM_LEASE=45",
+		"WEBHOOK_SAVE_RETENTION_DAYS=7",
+	}); err != nil {
+		t.Fatalf("Unexpected parse error: %v", err)
+	}
+
+	if configParser.options.WebhookSavePollingFrequency().Seconds() != 5 {
+		t.Fatalf("Expected WEBHOOK_SAVE_POLLING_FREQUENCY to be 5 seconds")
+	}
+
+	if configParser.options.WebhookSaveInitialBackoff().Seconds() != 15 {
+		t.Fatalf("Expected WEBHOOK_SAVE_INITIAL_BACKOFF to be 15 seconds")
+	}
+
+	if configParser.options.WebhookSaveMaxBackoff().Seconds() != 900 {
+		t.Fatalf("Expected WEBHOOK_SAVE_MAX_BACKOFF to be 900 seconds")
+	}
+
+	if configParser.options.WebhookSaveBackoffMultiplier() != 3 {
+		t.Fatalf("Expected WEBHOOK_SAVE_BACKOFF_MULTIPLIER to be 3")
+	}
+
+	// Zero means unlimited retries.
+	if configParser.options.WebhookSaveMaxAttempts() != 0 {
+		t.Fatalf("Expected WEBHOOK_SAVE_MAX_ATTEMPTS to be 0")
+	}
+
+	if configParser.options.WebhookSaveClaimLease().Seconds() != 45 {
+		t.Fatalf("Expected WEBHOOK_SAVE_CLAIM_LEASE to be 45 seconds")
+	}
+
+	if configParser.options.WebhookSaveRetention().Hours() != 24*7 {
+		t.Fatalf("Expected WEBHOOK_SAVE_RETENTION_DAYS to be 7 days")
+	}
+}
+
+func TestWebhookSaveOptionsInvalidValues(t *testing.T) {
+	invalidValues := []string{
+		"WEBHOOK_SAVE_POLLING_FREQUENCY=0",
+		"WEBHOOK_SAVE_INITIAL_BACKOFF=0",
+		"WEBHOOK_SAVE_MAX_BACKOFF=0",
+		"WEBHOOK_SAVE_BACKOFF_MULTIPLIER=0",
+		"WEBHOOK_SAVE_MAX_ATTEMPTS=-1",
+		"WEBHOOK_SAVE_CLAIM_LEASE=0",
+		"WEBHOOK_SAVE_RETENTION_DAYS=0",
+	}
+
+	for _, optionLine := range invalidValues {
+		configParser := NewConfigParser()
+		if err := configParser.parseLines([]string{optionLine}); err == nil {
+			t.Fatalf("Expected error for invalid value %q", optionLine)
+		}
+	}
+}

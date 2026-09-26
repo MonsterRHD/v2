@@ -1407,3 +1407,39 @@ footer .elevator {
 .pagination-entry-top .elevator {
     display: none;
 }
+
+/* Save-entry webhook delivery status */
+.webhook-delivery {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.9em;
+}
+
+.webhook-delivery .webhook-delivery-status {
+    white-space: nowrap;
+}
+
+.webhook-delivery .webhook-delivery-next,
+.webhook-delivery .webhook-delivery-error {
+    opacity: 0.85;
+}
+
+.webhook-delivery .webhook-delivery-error {
+    flex-basis: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 32em;
+}
+
+.webhook-delivery-failed {
+    color: var(--warning-color, #b00020);
+}
+
+.webhook-delivery-retry_waiting,
+.webhook-delivery-in_flight,
+.webhook-delivery-pending {
+    opacity: 0.9;
+}

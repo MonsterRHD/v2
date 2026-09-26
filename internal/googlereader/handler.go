@@ -244,11 +244,10 @@ func (h *greaderHandler) editTagHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	n := 0
 	var readEntryIDs []int64
 	var unreadEntryIDs []int64
-	var starredEntryIDs []int64
-	var unstarredEntryIDs []int64
+	var starredEntries model.Entries
+	var unstarredEntries model.Entries
 	for _, entry := range entries {
 		if read, exists := tags[ReadStream]; exists {
 			if read && entry.Status == model.EntryStatusUnread {
@@ -259,16 +258,13 @@ func (h *greaderHandler) editTagHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		if starred, exists := tags[StarredStream]; exists {
 			if starred && !entry.Starred {
-				starredEntryIDs = append(starredEntryIDs, entry.ID)
-				// filter the original array
-				entries[n] = entry
-				n++
+				starredEntries = append(starredEntries, entry)
 			} else if !starred && entry.Starred {
-				unstarredEntryIDs = append(unstarredEntryIDs, entry.ID)
+				unstarredEntries = append(unstarredEntries, entry)
 			}
 		}
 	}
-	entries = entries[:n]
+
 	if len(readEntryIDs) > 0 {
 		err = h.store.SetEntriesStatus(userID, readEntryIDs, model.EntryStatusRead)
 		if err != nil {
@@ -285,34 +281,29 @@ func (h *greaderHandler) editTagHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if len(unstarredEntryIDs) > 0 {
-		err = h.store.SetEntriesStarredState(userID, unstarredEntryIDs, false)
-		if err != nil {
-			response.JSONServerError(w, r, err)
-			return
-		}
-	}
-
-	if len(starredEntryIDs) > 0 {
-		err = h.store.SetEntriesStarredState(userID, starredEntryIDs, true)
-		if err != nil {
-			response.JSONServerError(w, r, err)
-			return
-		}
-	}
-
-	if len(entries) > 0 {
+	if len(starredEntries) > 0 || len(unstarredEntries) > 0 {
 		settings, err := h.store.Integration(userID)
 		if err != nil {
 			response.JSONServerError(w, r, err)
 			return
 		}
 
-		for _, entry := range entries {
-			e := entry
-			go func() {
-				integration.SendEntry(e, settings)
-			}()
+		// Unstar first: never-sent webhook deliveries are revoked in the
+		// same transaction while in-flight ones are left untouched.
+		if len(unstarredEntries) > 0 {
+			if err := integration.SyncStarredSaveEntries(h.store, unstarredEntries, false, settings); err != nil {
+				response.JSONServerError(w, r, err)
+				return
+			}
+		}
+
+		// Star: the starred state and the webhook outbox rows are committed
+		// together; other save integrations are triggered asynchronously.
+		if len(starredEntries) > 0 {
+			if err := integration.SyncStarredSaveEntries(h.store, starredEntries, true, settings); err != nil {
+				response.JSONServerError(w, r, err)
+				return
+			}
 		}
 	}
 

@@ -1575,7 +1575,58 @@ var migrations = [...]func(tx *sql.Tx) error{
 		_, err = tx.Exec(`
 			DROP INDEX IF EXISTS enclosures_user_entry_url_unique_idx;
 			CREATE UNIQUE INDEX enclosures_user_entry_url_unique_idx
-				ON enclosures (user_id, entry_id, sha256(url::bytea));
+			ON enclosures (user_id, entry_id, sha256(url::bytea));
+		`)
+		return err
+	},
+	func(tx *sql.Tx) (err error) {
+		// Persistent delivery records (transactional outbox) for "save
+		// entry" webhook events. Each row carries a stable event identifier
+		// that is sent on every attempt so the remote endpoint can
+		// deduplicate retries and crash takeovers.
+		_, err = tx.Exec(`
+			CREATE TABLE webhook_save_deliveries (
+				id bigserial primary key,
+				event_id text not null unique,
+				user_id bigint not null references users(id) on delete cascade,
+				entry_id bigint not null references entries(id) on delete cascade,
+				webhook_url text not null,
+				status text not null default 'pending',
+				attempts int not null default 0,
+				max_attempts int not null,
+				last_http_status int,
+				last_error text not null default '',
+				created_at timestamp with time zone not null default now(),
+				last_attempt_at timestamp with time zone,
+				claimed_at timestamp with time zone,
+				next_attempt_at timestamp with time zone not null default now(),
+				updated_at timestamp with time zone not null default now(),
+				constraint webhook_save_deliveries_status_check
+					check (status in ('pending', 'in_flight', 'retry_waiting', 'succeeded', 'failed', 'canceled')),
+				constraint webhook_save_deliveries_attempts_check check (attempts >= 0)
+			);
+
+			-- At most one active delivery per user/entry: duplicate saves
+			-- reuse the existing record instead of producing duplicate
+			-- remote requests.
+			CREATE UNIQUE INDEX webhook_save_deliveries_active_unique_idx
+				ON webhook_save_deliveries (user_id, entry_id)
+				WHERE status IN ('pending', 'in_flight', 'retry_waiting');
+
+			-- Dispatcher claim queue.
+			CREATE INDEX webhook_save_deliveries_due_idx
+				ON webhook_save_deliveries (next_attempt_at)
+				WHERE status IN ('pending', 'retry_waiting');
+
+			-- Crash takeover: in-flight records older than the claim lease
+			-- are reclaimed after a restart.
+			CREATE INDEX webhook_save_deliveries_inflight_idx
+				ON webhook_save_deliveries (claimed_at)
+				WHERE status = 'in_flight';
+
+			-- Terminal records cleanup and per-entry latest lookup.
+			CREATE INDEX webhook_save_deliveries_user_entry_updated_idx
+				ON webhook_save_deliveries (user_id, entry_id, updated_at);
 		`)
 		return err
 	},
