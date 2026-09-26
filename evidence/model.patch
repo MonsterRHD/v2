@@ -388,6 +388,350 @@ index ff1f444b..621fa3fb 100644
 +	CategoryName *string                 `json:"category_name,omitempty"`
 +	Settings     *OPMLImportItemSettings `json:"settings,omitempty"`
 +}
+diff --git a/evidence/model.patch b/evidence/model.patch
+new file mode 100644
+index 00000000..b9c55211
+--- /dev/null
++++ b/evidence/model.patch
+@@ -0,0 +1,337 @@
++diff --git a/client/client.go b/client/client.go
++index 4f849064..6d395250 100644
++--- a/client/client.go
+++++ b/client/client.go
++@@ -4,6 +4,7 @@
++ package client // import "miniflux.app/v2/client"
++ 
++ import (
+++	"bytes"
++ 	"context"
++ 	"encoding/json"
++ 	"fmt"
++@@ -646,6 +647,155 @@ func (c *Client) ImportContext(ctx context.Context, f io.ReadCloser) error {
++ 	return err
++ }
++ 
+++// CreateOPMLImport submits an OPML document as a resumable batch import. It
+++// returns the frozen import identifier that can be queried, continued or
+++// cancelled. Submitting the same document while the previous batch is still
+++// active returns the existing batch.
+++func (c *Client) CreateOPMLImport(opmlData []byte) (*OPMLImportCreation, error) {
+++	ctx, cancel := withDefaultTimeout()
+++	defer cancel()
+++	return c.CreateOPMLImportContext(ctx, opmlData)
+++}
+++
+++// CreateOPMLImportContext is the context-aware variant of CreateOPMLImport.
+++func (c *Client) CreateOPMLImportContext(ctx context.Context, opmlData []byte) (*OPMLImportCreation, error) {
+++	body, err := c.request.PostFile(ctx, "/v1/opml/imports", io.NopCloser(bytes.NewReader(opmlData)))
+++	if err != nil {
+++		return nil, err
+++	}
+++	defer body.Close()
+++
+++	var result OPMLImportCreation
+++	if err := json.NewDecoder(body).Decode(&result); err != nil {
+++		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+++	}
+++
+++	return &result, nil
+++}
+++
+++// OPMLImports returns all OPML import batches belonging to the current user.
+++func (c *Client) OPMLImports() (OPMLImports, error) {
+++	ctx, cancel := withDefaultTimeout()
+++	defer cancel()
+++	return c.OPMLImportsContext(ctx)
+++}
+++
+++// OPMLImportsContext is the context-aware variant of OPMLImports.
+++func (c *Client) OPMLImportsContext(ctx context.Context) (OPMLImports, error) {
+++	body, err := c.request.Get(ctx, "/v1/opml/imports")
+++	if err != nil {
+++		return nil, err
+++	}
+++	defer body.Close()
+++
+++	var imports OPMLImports
+++	if err := json.NewDecoder(body).Decode(&imports); err != nil {
+++		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+++	}
+++
+++	return imports, nil
+++}
+++
+++// OPMLImport returns a batch import with its frozen items and counters.
+++func (c *Client) OPMLImport(importID int64) (*OPMLImport, error) {
+++	ctx, cancel := withDefaultTimeout()
+++	defer cancel()
+++	return c.OPMLImportContext(ctx, importID)
+++}
+++
+++// OPMLImportContext is the context-aware variant of OPMLImport.
+++func (c *Client) OPMLImportContext(ctx context.Context, importID int64) (*OPMLImport, error) {
+++	body, err := c.request.Get(ctx, fmt.Sprintf("/v1/opml/imports/%d", importID))
+++	if err != nil {
+++		return nil, err
+++	}
+++	defer body.Close()
+++
+++	var importBatch OPMLImport
+++	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+++		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+++	}
+++
+++	return &importBatch, nil
+++}
+++
+++// ContinueOPMLImport resumes a batch, processing pending and temporary failed
+++// items.
+++func (c *Client) ContinueOPMLImport(importID int64) (*OPMLImport, error) {
+++	ctx, cancel := withDefaultTimeout()
+++	defer cancel()
+++	return c.ContinueOPMLImportContext(ctx, importID)
+++}
+++
+++// ContinueOPMLImportContext is the context-aware variant of ContinueOPMLImport.
+++func (c *Client) ContinueOPMLImportContext(ctx context.Context, importID int64) (*OPMLImport, error) {
+++	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/opml/imports/%d/continue", importID), nil)
+++	if err != nil {
+++		return nil, err
+++	}
+++	defer body.Close()
+++
+++	var importBatch OPMLImport
+++	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+++		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+++	}
+++
+++	return &importBatch, nil
+++}
+++
+++// CancelOPMLImport cancels a batch: no new fetch is started, already committed
+++// results are preserved.
+++func (c *Client) CancelOPMLImport(importID int64) (*OPMLImport, error) {
+++	ctx, cancel := withDefaultTimeout()
+++	defer cancel()
+++	return c.CancelOPMLImportContext(ctx, importID)
+++}
+++
+++// CancelOPMLImportContext is the context-aware variant of CancelOPMLImport.
+++func (c *Client) CancelOPMLImportContext(ctx context.Context, importID int64) (*OPMLImport, error) {
+++	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/opml/imports/%d/cancel", importID), nil)
+++	if err != nil {
+++		return nil, err
+++	}
+++	defer body.Close()
+++
+++	var importBatch OPMLImport
+++	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+++		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+++	}
+++
+++	return &importBatch, nil
+++}
+++
+++// RetryOPMLImportItem retries a failed item at its original position. A nil
+++// request retries the item without changing the frozen plan.
+++func (c *Client) RetryOPMLImportItem(importID, itemID int64, retryRequest *OPMLImportItemRetryRequest) (*OPMLImport, error) {
+++	ctx, cancel := withDefaultTimeout()
+++	defer cancel()
+++	return c.RetryOPMLImportItemContext(ctx, importID, itemID, retryRequest)
+++}
+++
+++// RetryOPMLImportItemContext is the context-aware variant of RetryOPMLImportItem.
+++func (c *Client) RetryOPMLImportItemContext(ctx context.Context, importID, itemID int64, retryRequest *OPMLImportItemRetryRequest) (*OPMLImport, error) {
+++	var payload any
+++	if retryRequest != nil {
+++		payload = retryRequest
+++	}
+++
+++	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/opml/imports/%d/items/%d/retry", importID, itemID), payload)
+++	if err != nil {
+++		return nil, err
+++	}
+++	defer body.Close()
+++
+++	var importBatch OPMLImport
+++	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+++		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+++	}
+++
+++	return &importBatch, nil
+++}
+++
++ // Feed gets a feed.
++ func (c *Client) Feed(feedID int64) (*Feed, error) {
++ 	ctx, cancel := withDefaultTimeout()
++diff --git a/client/client_test.go b/client/client_test.go
++index d8f37fda..d821bb4f 100644
++--- a/client/client_test.go
+++++ b/client/client_test.go
++@@ -1414,3 +1414,111 @@ func TestEntryIDsWithCombinedFilter(t *testing.T) {
++ 		t.Fatalf("Expected %s, got %s", asJSON(expected), asJSON(res))
++ 	}
++ }
+++
+++func TestOPMLBatchImportLifecycle(t *testing.T) {
+++	var requestIndex int
+++
+++	client := NewClientWithOptions(
+++		"http://mf",
+++		WithHTTPClient(
+++			newFakeHTTPClient(t, func(t *testing.T, req *http.Request) *http.Response {
+++				switch requestIndex {
+++				case 0:
+++					expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports", nil, req)
+++					return jsonResponseFrom(t, http.StatusCreated, http.Header{}, &OPMLImportCreation{
+++						ImportID: 42,
+++						Status:   OPMLImportStatusPending,
+++						Total:    2,
+++					})
+++				case 1:
+++					expectRequest(t, http.MethodGet, "http://mf/v1/opml/imports/42", nil, req)
+++					return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{
+++						ID:     42,
+++						Status: OPMLImportStatusPaused,
+++						Total:  2,
+++						Items: []*OPMLImportItem{
+++							{ID: 7, Position: 1, Status: OPMLImportItemStatusFetchFailed, FeedURL: "http://example.com/"},
+++						},
+++						FetchFailedCount: 1,
+++						PendingCount:     1,
+++					})
+++				case 2:
+++					expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports/42/continue", nil, req)
+++					return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{ID: 42, Status: OPMLImportStatusInProgress})
+++				case 3:
+++					expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports/42/cancel", nil, req)
+++					return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{ID: 42, Status: OPMLImportStatusCancelled})
+++				default:
+++					t.Fatalf("unexpected request #%d: %s %s", requestIndex, req.Method, req.URL)
+++					return nil
+++				}
+++			})))
+++
+++	created, err := client.CreateOPMLImportContext(t.Context(), []byte("<opml/>"))
+++	if err != nil {
+++		t.Fatalf("Expected no error, got %v", err)
+++	}
+++	if created.ImportID != 42 || created.Total != 2 {
+++		t.Fatalf("unexpected creation response: %+v", created)
+++	}
+++	requestIndex++
+++
+++	imp, err := client.OPMLImportContext(t.Context(), 42)
+++	if err != nil {
+++		t.Fatalf("Expected no error, got %v", err)
+++	}
+++	if imp.Status != OPMLImportStatusPaused || imp.Items[0].ID != 7 {
+++		t.Fatalf("unexpected import: %+v", imp)
+++	}
+++	requestIndex++
+++
+++	if _, err := client.ContinueOPMLImportContext(t.Context(), 42); err != nil {
+++		t.Fatalf("Expected no error, got %v", err)
+++	}
+++	requestIndex++
+++
+++	cancelled, err := client.CancelOPMLImportContext(t.Context(), 42)
+++	if err != nil {
+++		t.Fatalf("Expected no error, got %v", err)
+++	}
+++	if cancelled.Status != OPMLImportStatusCancelled {
+++		t.Fatalf("unexpected status: %s", cancelled.Status)
+++	}
+++}
+++
+++func TestOPMLBatchRetryItem(t *testing.T) {
+++	category := "Tech"
+++	client := NewClientWithOptions(
+++		"http://mf",
+++		WithHTTPClient(
+++			newFakeHTTPClient(t, func(t *testing.T, req *http.Request) *http.Response {
+++				expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports/42/items/7/retry", func(r io.Reader) {
+++					var body OPMLImportItemRetryRequest
+++					if err := json.NewDecoder(r).Decode(&body); err != nil {
+++						t.Fatalf("unable to decode request body: %v", err)
+++					}
+++					if body.FeedURL != "http://example.com/fixed" {
+++						t.Fatalf("unexpected feed URL: %q", body.FeedURL)
+++					}
+++					if body.CategoryName == nil || *body.CategoryName != category {
+++						t.Fatalf("unexpected category: %+v", body.CategoryName)
+++					}
+++				}, req)
+++				return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{
+++					ID:     42,
+++					Status: OPMLImportStatusInProgress,
+++					Items:  []*OPMLImportItem{{ID: 7, Position: 3, Status: OPMLImportItemStatusPending}},
+++				})
+++			})))
+++
+++	imp, err := client.RetryOPMLImportItemContext(t.Context(), 42, 7, &OPMLImportItemRetryRequest{
+++		FeedURL:      "http://example.com/fixed",
+++		CategoryName: &category,
+++	})
+++	if err != nil {
+++		t.Fatalf("Expected no error, got %v", err)
+++	}
+++	if imp.Items[0].Position != 3 {
+++		t.Fatalf("the item must keep its original position: %+v", imp.Items[0])
+++	}
+++}
++diff --git a/client/model.go b/client/model.go
++index ff1f444b..621fa3fb 100644
++--- a/client/model.go
+++++ b/client/model.go
++@@ -393,3 +393,101 @@ type APIKeyCreationRequest struct {
++ func SetOptionalField[T any](value T) *T {
++ 	return new(value)
++ }
+++
+++// OPML import batch statuses.
+++const (
+++	OPMLImportStatusPending    = "pending"
+++	OPMLImportStatusInProgress = "in_progress"
+++	OPMLImportStatusPaused     = "paused"
+++	OPMLImportStatusCancelling = "cancelling"
+++	OPMLImportStatusCancelled  = "cancelled"
+++	OPMLImportStatusCompleted  = "completed"
+++)
+++
+++// OPML import item statuses.
+++const (
+++	OPMLImportItemStatusPending          = "pending"
+++	OPMLImportItemStatusCreated          = "created"
+++	OPMLImportItemStatusMerged           = "merged"
+++	OPMLImportItemStatusFetchFailed      = "fetch_failed"
+++	OPMLImportItemStatusValidationFailed = "validation_failed"
+++)
+++
+++// OPMLImportItemSettings contains the frozen settings of an OPML subscription.
+++type OPMLImportItemSettings struct {
+++	ScraperRules                string `json:"scraper_rules,omitempty"`
+++	RewriteRules                string `json:"rewrite_rules,omitempty"`
+++	UrlRewriteRules             string `json:"url_rewrite_rules,omitempty"`
+++	BlocklistRules              string `json:"blocklist_rules,omitempty"`
+++	KeeplistRules               string `json:"keeplist_rules,omitempty"`
+++	BlockFilterEntryRules       string `json:"block_filter_entry_rules,omitempty"`
+++	KeepFilterEntryRules        string `json:"keep_filter_entry_rules,omitempty"`
+++	UserAgent                   string `json:"user_agent,omitempty"`
+++	Crawler                     bool   `json:"crawler,omitempty"`
+++	IgnoreHTTPCache             bool   `json:"ignore_http_cache,omitempty"`
+++	FetchViaProxy               bool   `json:"fetch_via_proxy,omitempty"`
+++	Disabled                    bool   `json:"disabled,omitempty"`
+++	NoMediaPlayer               bool   `json:"no_media_player,omitempty"`
+++	HideGlobally                bool   `json:"hide_globally,omitempty"`
+++	AllowSelfSignedCertificates bool   `json:"allow_self_signed_certificates,omitempty"`
+++	DisableHTTP2                bool   `json:"disable_http2,omitempty"`
+++	IgnoreEntryUpdates          bool   `json:"ignore_entry_updates,omitempty"`
+++}
+++
+++// OPMLImportItem represents a single frozen subscription within an OPML import batch.
+++type OPMLImportItem struct {
+++	ID           int64                   `json:"id"`
+++	ImportID     int64                   `json:"i
+\ No newline at end of file
 diff --git a/evidence/rubric-comparison.txt b/evidence/rubric-comparison.txt
 new file mode 100644
 index 00000000..c93df187
