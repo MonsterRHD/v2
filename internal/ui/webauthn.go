@@ -257,6 +257,14 @@ func (h *handler) finishLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := authenticateWebSession(w, r, h.store, user); err != nil {
+		if isWebSessionRevoked(err) {
+			slog.Warn("WebAuthn login aborted: the web session was revoked by a concurrent global flush",
+				slog.Int64("user_id", user.ID),
+				slog.String("client_ip", request.ClientIP(r)),
+			)
+			response.JSONUnauthorized(w, r)
+			return
+		}
 		response.JSONServerError(w, r, err)
 		return
 	}

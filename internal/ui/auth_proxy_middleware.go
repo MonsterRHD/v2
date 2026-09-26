@@ -93,6 +93,13 @@ func (m *authProxyMiddleware) handle(next http.Handler) http.Handler {
 
 		m.store.SetLastLogin(user.ID)
 		if err := authenticateWebSession(w, r, m.store, user); err != nil {
+			if isWebSessionRevoked(err) {
+				slog.Warn("[AuthProxy] Login aborted: the web session was revoked by a concurrent global flush",
+					slog.Int64("user_id", user.ID),
+				)
+				response.HTMLRedirect(w, r, m.basePath+"/")
+				return
+			}
 			response.HTMLServerError(w, r, err)
 			return
 		}

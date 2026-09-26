@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 2,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 3,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 4,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 5,
+    "passed": false,
+    "reason": "webSessionGenerationMonitor.Refresh 的读取错误分支返回缓存 generation 和 nil error。"
+  },
+  {
+    "id": 6,
+    "passed": false,
+    "reason": "PostgreSQL 未运行，多实例数据库代际刷新和通知丢失轮询没有运行验证。"
+  },
+  {
+    "id": 7,
+    "passed": true,
+    "reason": ""
+  },
+  {
+    "id": 8,
+    "passed": true,
+    "reason": ""
+  }
+]

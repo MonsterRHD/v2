@@ -40,6 +40,12 @@ func startDaemon(store *storage.Storage) {
 	var certReloadFn func()
 	if config.Opts.HasHTTPService() {
 		httpServers, certReloadFn = server.StartWebServer(store, pool)
+
+		// Keep the local web session generation view synchronized with
+		// "flush-sessions" commands executed by another process or instance.
+		generationCtx, cancelGenerationMonitor := context.WithCancel(context.Background())
+		store.StartWebSessionGenerationMonitor(generationCtx, config.Opts.DatabaseURL())
+		defer cancelGenerationMonitor()
 	}
 
 	metricsCtx, cancelMetrics := context.WithCancel(context.Background())

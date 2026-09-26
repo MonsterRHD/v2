@@ -1575,7 +1575,29 @@ var migrations = [...]func(tx *sql.Tx) error{
 		_, err = tx.Exec(`
 			DROP INDEX IF EXISTS enclosures_user_entry_url_unique_idx;
 			CREATE UNIQUE INDEX enclosures_user_entry_url_unique_idx
-				ON enclosures (user_id, entry_id, sha256(url::bytea));
+			ON enclosures (user_id, entry_id, sha256(url::bytea));
+		`)
+		return err
+	},
+	func(tx *sql.Tx) (err error) {
+		// Persistent global web session generation. The "flush-sessions"
+		// command bumps this value in the same transaction that deletes all
+		// web session rows. Every web session is stamped with the generation
+		// it was created in, so any Miniflux instance can recognize a revoked
+		// session straight from the database, including sessions that were
+		// already being handled when the flush happened.
+		_, err = tx.Exec(`
+			CREATE TABLE web_session_generations (
+				id smallint NOT NULL DEFAULT 1,
+				generation bigint NOT NULL DEFAULT 0,
+				PRIMARY KEY (id),
+				CONSTRAINT web_session_generations_singleton CHECK (id = 1)
+			);
+
+			INSERT INTO web_session_generations (id, generation) VALUES (1, 0);
+
+			ALTER TABLE web_sessions
+				ADD COLUMN generation bigint NOT NULL DEFAULT 0;
 		`)
 		return err
 	},

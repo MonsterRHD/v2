@@ -26,6 +26,10 @@ type WebSession struct {
 	ID         string
 	SecretHash []byte
 	CreatedAt  time.Time
+	// Generation is the global session generation stamped when the row was
+	// created or rotated. A session whose generation differs from the current
+	// global generation has been revoked by "flush-sessions".
+	Generation int64
 	UserAgent  string
 	IP         string
 	userID     *int64

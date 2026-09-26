@@ -5,6 +5,7 @@ package ui // import "miniflux.app/v2/internal/ui"
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -16,6 +17,15 @@ import (
 )
 
 const sessionCookieName = "MinifluxSessionID"
+
+// isWebSessionRevoked reports whether authentication failed because a global
+// session flush revoked the browser session concurrently with the login. The
+// caller must answer with an explicit, unauthenticated response instead of a
+// generic server error: no session is granted and no stale-generation row is
+// produced.
+func isWebSessionRevoked(err error) bool {
+	return errors.Is(err, storage.ErrWebSessionNotFound)
+}
 
 // authenticateWebSession binds the current browser session to the given user,
 // rotates its identifier and secret, and refreshes the client cookie.

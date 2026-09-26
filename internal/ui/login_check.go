@@ -81,6 +81,14 @@ func (h *handler) checkLogin(w http.ResponseWriter, r *http.Request) {
 
 	h.store.SetLastLogin(user.ID)
 	if err := authenticateWebSession(w, r, h.store, user); err != nil {
+		if isWebSessionRevoked(err) {
+			slog.Warn("Login aborted: the web session was revoked by a concurrent global flush",
+				slog.Int64("user_id", user.ID),
+				slog.String("client_ip", clientIP),
+			)
+			response.HTMLRedirect(w, r, h.basePath+"/")
+			return
+		}
 		response.HTMLServerError(w, r, err)
 		return
 	}

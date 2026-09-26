@@ -147,6 +147,13 @@ func (h *handler) oauth2Callback(w http.ResponseWriter, r *http.Request) {
 
 	h.store.SetLastLogin(user.ID)
 	if err := authenticateWebSession(w, r, h.store, user); err != nil {
+		if isWebSessionRevoked(err) {
+			slog.Warn("OAuth2 login aborted: the web session was revoked by a concurrent global flush",
+				slog.Int64("user_id", user.ID),
+			)
+			response.HTMLRedirect(w, r, h.basePath+"/")
+			return
+		}
 		response.HTMLServerError(w, r, err)
 		return
 	}
