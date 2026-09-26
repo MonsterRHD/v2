@@ -84,6 +84,22 @@ func (s *Storage) AnotherFeedURLExists(userID, feedID int64, feedURL string) boo
 	return result
 }
 
+// FeedByFeedURL returns the feed matching the given URL for the user. It
+// returns nil when no such feed exists.
+func (s *Storage) FeedByFeedURL(userID int64, feedURL string) (*model.Feed, error) {
+	var feed model.Feed
+	query := `SELECT id, feed_url, title FROM feeds WHERE user_id=$1 AND feed_url=$2 LIMIT 1`
+	err := s.db.QueryRow(query, userID, feedURL).Scan(&feed.ID, &feed.FeedURL, &feed.Title)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf(`store: unable to fetch feed by URL %q: %w`, feedURL, err)
+	default:
+		return &feed, nil
+	}
+}
+
 // CountAllFeeds returns the number of feeds keyed by enabled, disabled, and total.
 func (s *Storage) CountAllFeeds() (map[string]int64, error) {
 	rows, err := s.db.Query(`SELECT disabled, count(*) FROM feeds GROUP BY disabled`)

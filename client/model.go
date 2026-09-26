@@ -393,3 +393,101 @@ type APIKeyCreationRequest struct {
 func SetOptionalField[T any](value T) *T {
 	return new(value)
 }
+
+// OPML import batch statuses.
+const (
+	OPMLImportStatusPending    = "pending"
+	OPMLImportStatusInProgress = "in_progress"
+	OPMLImportStatusPaused     = "paused"
+	OPMLImportStatusCancelling = "cancelling"
+	OPMLImportStatusCancelled  = "cancelled"
+	OPMLImportStatusCompleted  = "completed"
+)
+
+// OPML import item statuses.
+const (
+	OPMLImportItemStatusPending          = "pending"
+	OPMLImportItemStatusCreated          = "created"
+	OPMLImportItemStatusMerged           = "merged"
+	OPMLImportItemStatusFetchFailed      = "fetch_failed"
+	OPMLImportItemStatusValidationFailed = "validation_failed"
+)
+
+// OPMLImportItemSettings contains the frozen settings of an OPML subscription.
+type OPMLImportItemSettings struct {
+	ScraperRules                string `json:"scraper_rules,omitempty"`
+	RewriteRules                string `json:"rewrite_rules,omitempty"`
+	UrlRewriteRules             string `json:"url_rewrite_rules,omitempty"`
+	BlocklistRules              string `json:"blocklist_rules,omitempty"`
+	KeeplistRules               string `json:"keeplist_rules,omitempty"`
+	BlockFilterEntryRules       string `json:"block_filter_entry_rules,omitempty"`
+	KeepFilterEntryRules        string `json:"keep_filter_entry_rules,omitempty"`
+	UserAgent                   string `json:"user_agent,omitempty"`
+	Crawler                     bool   `json:"crawler,omitempty"`
+	IgnoreHTTPCache             bool   `json:"ignore_http_cache,omitempty"`
+	FetchViaProxy               bool   `json:"fetch_via_proxy,omitempty"`
+	Disabled                    bool   `json:"disabled,omitempty"`
+	NoMediaPlayer               bool   `json:"no_media_player,omitempty"`
+	HideGlobally                bool   `json:"hide_globally,omitempty"`
+	AllowSelfSignedCertificates bool   `json:"allow_self_signed_certificates,omitempty"`
+	DisableHTTP2                bool   `json:"disable_http2,omitempty"`
+	IgnoreEntryUpdates          bool   `json:"ignore_entry_updates,omitempty"`
+}
+
+// OPMLImportItem represents a single frozen subscription within an OPML import batch.
+type OPMLImportItem struct {
+	ID           int64                   `json:"id"`
+	ImportID     int64                   `json:"import_id"`
+	Position     int                     `json:"position"`
+	Title        string                  `json:"title"`
+	FeedURL      string                  `json:"feed_url"`
+	SiteURL      string                  `json:"site_url"`
+	Description  string                  `json:"description"`
+	CategoryName string                  `json:"category_name"`
+	Settings     *OPMLImportItemSettings `json:"settings,omitempty"`
+	Status       string                  `json:"status"`
+	FeedID       int64                   `json:"feed_id,omitempty"`
+	ErrorMessage string                  `json:"error_message,omitempty"`
+	Attempts     int                     `json:"attempts"`
+	CreatedAt    time.Time               `json:"created_at"`
+	UpdatedAt    time.Time               `json:"updated_at"`
+}
+
+// OPMLImport represents a resumable OPML import batch.
+type OPMLImport struct {
+	ID                    int64             `json:"id"`
+	UserID                int64             `json:"user_id"`
+	Title                 string            `json:"title"`
+	Status                string            `json:"status"`
+	ErrorMessage          string            `json:"error_message,omitempty"`
+	Total                 int               `json:"total"`
+	CreatedCount          int               `json:"created_count"`
+	MergedCount           int               `json:"merged_count"`
+	PendingCount          int               `json:"pending_count"`
+	FetchFailedCount      int               `json:"fetch_failed_count"`
+	ValidationFailedCount int               `json:"validation_failed_count"`
+	MissingFeedCount      int               `json:"missing_feed_count"`
+	CreatedAt             time.Time         `json:"created_at"`
+	StartedAt             *time.Time        `json:"started_at,omitempty"`
+	FinishedAt            *time.Time        `json:"finished_at,omitempty"`
+	UpdatedAt             time.Time         `json:"updated_at"`
+	Items                 []*OPMLImportItem `json:"items,omitempty"`
+}
+
+// OPMLImports represents a list of OPML import batches.
+type OPMLImports []*OPMLImport
+
+// OPMLImportCreation is returned when an OPML document is first submitted.
+type OPMLImportCreation struct {
+	ImportID       int64  `json:"import_id"`
+	Status         string `json:"status"`
+	Total          int    `json:"total"`
+	AlreadyExisted bool   `json:"already_existed"`
+}
+
+// OPMLImportItemRetryRequest optionally fixes a failed item before retrying it.
+type OPMLImportItemRetryRequest struct {
+	FeedURL      string                  `json:"feed_url,omitempty"`
+	CategoryName *string                 `json:"category_name,omitempty"`
+	Settings     *OPMLImportItemSettings `json:"settings,omitempty"`
+}

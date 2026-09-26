@@ -1414,3 +1414,111 @@ func TestEntryIDsWithCombinedFilter(t *testing.T) {
 		t.Fatalf("Expected %s, got %s", asJSON(expected), asJSON(res))
 	}
 }
+
+func TestOPMLBatchImportLifecycle(t *testing.T) {
+	var requestIndex int
+
+	client := NewClientWithOptions(
+		"http://mf",
+		WithHTTPClient(
+			newFakeHTTPClient(t, func(t *testing.T, req *http.Request) *http.Response {
+				switch requestIndex {
+				case 0:
+					expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports", nil, req)
+					return jsonResponseFrom(t, http.StatusCreated, http.Header{}, &OPMLImportCreation{
+						ImportID: 42,
+						Status:   OPMLImportStatusPending,
+						Total:    2,
+					})
+				case 1:
+					expectRequest(t, http.MethodGet, "http://mf/v1/opml/imports/42", nil, req)
+					return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{
+						ID:     42,
+						Status: OPMLImportStatusPaused,
+						Total:  2,
+						Items: []*OPMLImportItem{
+							{ID: 7, Position: 1, Status: OPMLImportItemStatusFetchFailed, FeedURL: "http://example.com/"},
+						},
+						FetchFailedCount: 1,
+						PendingCount:     1,
+					})
+				case 2:
+					expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports/42/continue", nil, req)
+					return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{ID: 42, Status: OPMLImportStatusInProgress})
+				case 3:
+					expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports/42/cancel", nil, req)
+					return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{ID: 42, Status: OPMLImportStatusCancelled})
+				default:
+					t.Fatalf("unexpected request #%d: %s %s", requestIndex, req.Method, req.URL)
+					return nil
+				}
+			})))
+
+	created, err := client.CreateOPMLImportContext(t.Context(), []byte("<opml/>"))
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if created.ImportID != 42 || created.Total != 2 {
+		t.Fatalf("unexpected creation response: %+v", created)
+	}
+	requestIndex++
+
+	imp, err := client.OPMLImportContext(t.Context(), 42)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if imp.Status != OPMLImportStatusPaused || imp.Items[0].ID != 7 {
+		t.Fatalf("unexpected import: %+v", imp)
+	}
+	requestIndex++
+
+	if _, err := client.ContinueOPMLImportContext(t.Context(), 42); err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	requestIndex++
+
+	cancelled, err := client.CancelOPMLImportContext(t.Context(), 42)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if cancelled.Status != OPMLImportStatusCancelled {
+		t.Fatalf("unexpected status: %s", cancelled.Status)
+	}
+}
+
+func TestOPMLBatchRetryItem(t *testing.T) {
+	category := "Tech"
+	client := NewClientWithOptions(
+		"http://mf",
+		WithHTTPClient(
+			newFakeHTTPClient(t, func(t *testing.T, req *http.Request) *http.Response {
+				expectRequest(t, http.MethodPost, "http://mf/v1/opml/imports/42/items/7/retry", func(r io.Reader) {
+					var body OPMLImportItemRetryRequest
+					if err := json.NewDecoder(r).Decode(&body); err != nil {
+						t.Fatalf("unable to decode request body: %v", err)
+					}
+					if body.FeedURL != "http://example.com/fixed" {
+						t.Fatalf("unexpected feed URL: %q", body.FeedURL)
+					}
+					if body.CategoryName == nil || *body.CategoryName != category {
+						t.Fatalf("unexpected category: %+v", body.CategoryName)
+					}
+				}, req)
+				return jsonResponseFrom(t, http.StatusOK, http.Header{}, &OPMLImport{
+					ID:     42,
+					Status: OPMLImportStatusInProgress,
+					Items:  []*OPMLImportItem{{ID: 7, Position: 3, Status: OPMLImportItemStatusPending}},
+				})
+			})))
+
+	imp, err := client.RetryOPMLImportItemContext(t.Context(), 42, 7, &OPMLImportItemRetryRequest{
+		FeedURL:      "http://example.com/fixed",
+		CategoryName: &category,
+	})
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if imp.Items[0].Position != 3 {
+		t.Fatalf("the item must keep its original position: %+v", imp.Items[0])
+	}
+}

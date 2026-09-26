@@ -15,6 +15,7 @@ import (
 	"miniflux.app/v2/internal/config"
 	"miniflux.app/v2/internal/http/server"
 	"miniflux.app/v2/internal/metric"
+	"miniflux.app/v2/internal/reader/opml"
 	"miniflux.app/v2/internal/storage"
 	"miniflux.app/v2/internal/systemd"
 	"miniflux.app/v2/internal/worker"
@@ -31,6 +32,16 @@ func startDaemon(store *storage.Storage) {
 	signal.Notify(reload, syscall.SIGHUP)
 
 	pool := worker.NewPool(store, config.Opts.WorkerPoolSize())
+
+	if !config.Opts.HasMaintenanceMode() {
+		// OPML batch imports interrupted by a restart (process killed while
+		// fetching) resume from their unfinished items.
+		recoveryCtx, cancelRecovery := context.WithCancel(context.Background())
+		defer cancelRecovery()
+		if err := opml.NewBatchHandler(store).RecoverInterrupted(recoveryCtx); err != nil {
+			slog.Error("Unable to recover interrupted OPML imports", slog.Any("error", err))
+		}
+	}
 
 	if config.Opts.HasSchedulerService() && !config.Opts.HasMaintenanceMode() {
 		runScheduler(store, pool)

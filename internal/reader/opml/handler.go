@@ -95,8 +95,12 @@ func (h *Handler) Import(userID int64, data io.Reader) error {
 }
 
 func (h *Handler) resolveCategory(userID int64, categoryName string) (*model.Category, error) {
+	return resolveImportCategory(h.store, userID, categoryName)
+}
+
+func resolveImportCategory(store *storage.Storage, userID int64, categoryName string) (*model.Category, error) {
 	if categoryName == "" {
-		category, err := h.store.FirstCategory(userID)
+		category, err := store.FirstCategory(userID)
 		if err != nil {
 			return nil, fmt.Errorf("opml: unable to find first category: %w", err)
 		}
@@ -106,13 +110,13 @@ func (h *Handler) resolveCategory(userID int64, categoryName string) (*model.Cat
 		return category, nil
 	}
 
-	category, err := h.store.CategoryByTitle(userID, categoryName)
+	category, err := store.CategoryByTitle(userID, categoryName)
 	if err != nil {
 		return nil, fmt.Errorf("opml: unable to search category by title: %w", err)
 	}
 
 	if category == nil {
-		category, err = h.store.CreateCategory(userID, &model.CategoryCreationRequest{Title: categoryName})
+		category, err = store.CreateCategory(userID, &model.CategoryCreationRequest{Title: categoryName})
 		if err != nil {
 			return nil, fmt.Errorf(`opml: unable to create this category: %q`, categoryName)
 		}

@@ -1575,7 +1575,86 @@ var migrations = [...]func(tx *sql.Tx) error{
 		_, err = tx.Exec(`
 			DROP INDEX IF EXISTS enclosures_user_entry_url_unique_idx;
 			CREATE UNIQUE INDEX enclosures_user_entry_url_unique_idx
-				ON enclosures (user_id, entry_id, sha256(url::bytea));
+			ON enclosures (user_id, entry_id, sha256(url::bytea));
+		`)
+		return err
+	},
+	func(tx *sql.Tx) (err error) {
+		// Resumable OPML imports: a frozen import plan (opml_imports) and
+		// its per-subscription items (opml_import_items) with deterministic
+		// statuses so interrupted/cancelled batches can be continued without
+		// duplicating feeds or categories.
+		_, err = tx.Exec(`
+			CREATE TYPE opml_import_status AS ENUM (
+				'pending',
+				'in_progress',
+				'paused',
+				'cancelling',
+				'cancelled',
+				'completed'
+			);
+
+			CREATE TYPE opml_import_item_status AS ENUM (
+				'pending',
+				'created',
+				'merged',
+				'fetch_failed',
+				'validation_failed'
+			);
+
+			CREATE TABLE opml_imports (
+				id BIGSERIAL,
+				user_id int not null,
+				title text not null default '',
+				content_hash text not null,
+				status opml_import_status not null default 'pending',
+				error_message text not null default '',
+				created_at timestamp with time zone not null default now(),
+				started_at timestamp with time zone,
+				finished_at timestamp with time zone,
+				updated_at timestamp with time zone not null default now(),
+				primary key (id),
+				foreign key (user_id) references users(id) on delete cascade
+			);
+
+			CREATE INDEX opml_imports_user_created_idx
+				ON opml_imports (user_id, created_at DESC);
+
+			-- Submitting the same OPML document while a batch is still
+			-- active returns the existing batch instead of creating a new
+			-- one. Finished batches (completed/cancelled) can be submitted
+			-- again; item-level merge logic prevents feed duplication.
+			CREATE UNIQUE INDEX opml_imports_active_user_hash_uidx
+				ON opml_imports (user_id, content_hash)
+				WHERE status IN ('pending', 'in_progress', 'paused', 'cancelling');
+
+			CREATE TABLE opml_import_items (
+				id BIGSERIAL,
+				import_id bigint not null,
+				position int not null,
+				title text not null default '',
+				feed_url text not null,
+				site_url text not null default '',
+				description text not null default '',
+				category_name text not null default '',
+				settings jsonb not null default '{}'::jsonb,
+				status opml_import_item_status not null default 'pending',
+				feed_id bigint,
+				error_message text not null default '',
+				attempts int not null default 0,
+				created_at timestamp with time zone not null default now(),
+				updated_at timestamp with time zone not null default now(),
+				primary key (id),
+				unique (import_id, position),
+				foreign key (import_id) references opml_imports(id) on delete cascade,
+				foreign key (feed_id) references feeds(id) on delete set null
+			);
+
+			CREATE INDEX opml_import_items_import_position_idx
+				ON opml_import_items (import_id, position);
+
+			CREATE INDEX opml_import_items_status_idx
+				ON opml_import_items (import_id, status);
 		`)
 		return err
 	},

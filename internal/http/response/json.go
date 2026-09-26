@@ -158,6 +158,28 @@ func JSONNotFound(w http.ResponseWriter, r *http.Request) {
 		Write()
 }
 
+// JSONConflict sends a conflict error to the client.
+func JSONConflict(w http.ResponseWriter, r *http.Request, err error) {
+	slog.Warn(http.StatusText(http.StatusConflict),
+		slog.Any("error", err),
+		slog.String("client_ip", request.ClientIP(r)),
+		slog.Group("request",
+			slog.String("method", r.Method),
+			slog.String("uri", r.RequestURI),
+			slog.String("user_agent", r.UserAgent()),
+		),
+		slog.Group("response",
+			slog.Int("status_code", http.StatusConflict),
+		),
+	)
+
+	NewBuilder(w, r).
+		WithStatus(http.StatusConflict).
+		WithHeader("Content-Type", jsonContentTypeHeader).
+		WithBodyAsBytes(generateJSONError(err)).
+		Write()
+}
+
 func generateJSONError(err error) []byte {
 	type errorMsg struct {
 		ErrorMessage string `json:"error_message"`

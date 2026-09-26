@@ -4,6 +4,7 @@
 package client // import "miniflux.app/v2/client"
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -644,6 +645,155 @@ func (c *Client) Import(f io.ReadCloser) error {
 func (c *Client) ImportContext(ctx context.Context, f io.ReadCloser) error {
 	_, err := c.request.PostFile(ctx, "/v1/import", f)
 	return err
+}
+
+// CreateOPMLImport submits an OPML document as a resumable batch import. It
+// returns the frozen import identifier that can be queried, continued or
+// cancelled. Submitting the same document while the previous batch is still
+// active returns the existing batch.
+func (c *Client) CreateOPMLImport(opmlData []byte) (*OPMLImportCreation, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.CreateOPMLImportContext(ctx, opmlData)
+}
+
+// CreateOPMLImportContext is the context-aware variant of CreateOPMLImport.
+func (c *Client) CreateOPMLImportContext(ctx context.Context, opmlData []byte) (*OPMLImportCreation, error) {
+	body, err := c.request.PostFile(ctx, "/v1/opml/imports", io.NopCloser(bytes.NewReader(opmlData)))
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var result OPMLImportCreation
+	if err := json.NewDecoder(body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return &result, nil
+}
+
+// OPMLImports returns all OPML import batches belonging to the current user.
+func (c *Client) OPMLImports() (OPMLImports, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.OPMLImportsContext(ctx)
+}
+
+// OPMLImportsContext is the context-aware variant of OPMLImports.
+func (c *Client) OPMLImportsContext(ctx context.Context) (OPMLImports, error) {
+	body, err := c.request.Get(ctx, "/v1/opml/imports")
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var imports OPMLImports
+	if err := json.NewDecoder(body).Decode(&imports); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return imports, nil
+}
+
+// OPMLImport returns a batch import with its frozen items and counters.
+func (c *Client) OPMLImport(importID int64) (*OPMLImport, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.OPMLImportContext(ctx, importID)
+}
+
+// OPMLImportContext is the context-aware variant of OPMLImport.
+func (c *Client) OPMLImportContext(ctx context.Context, importID int64) (*OPMLImport, error) {
+	body, err := c.request.Get(ctx, fmt.Sprintf("/v1/opml/imports/%d", importID))
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var importBatch OPMLImport
+	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return &importBatch, nil
+}
+
+// ContinueOPMLImport resumes a batch, processing pending and temporary failed
+// items.
+func (c *Client) ContinueOPMLImport(importID int64) (*OPMLImport, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.ContinueOPMLImportContext(ctx, importID)
+}
+
+// ContinueOPMLImportContext is the context-aware variant of ContinueOPMLImport.
+func (c *Client) ContinueOPMLImportContext(ctx context.Context, importID int64) (*OPMLImport, error) {
+	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/opml/imports/%d/continue", importID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var importBatch OPMLImport
+	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return &importBatch, nil
+}
+
+// CancelOPMLImport cancels a batch: no new fetch is started, already committed
+// results are preserved.
+func (c *Client) CancelOPMLImport(importID int64) (*OPMLImport, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.CancelOPMLImportContext(ctx, importID)
+}
+
+// CancelOPMLImportContext is the context-aware variant of CancelOPMLImport.
+func (c *Client) CancelOPMLImportContext(ctx context.Context, importID int64) (*OPMLImport, error) {
+	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/opml/imports/%d/cancel", importID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var importBatch OPMLImport
+	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return &importBatch, nil
+}
+
+// RetryOPMLImportItem retries a failed item at its original position. A nil
+// request retries the item without changing the frozen plan.
+func (c *Client) RetryOPMLImportItem(importID, itemID int64, retryRequest *OPMLImportItemRetryRequest) (*OPMLImport, error) {
+	ctx, cancel := withDefaultTimeout()
+	defer cancel()
+	return c.RetryOPMLImportItemContext(ctx, importID, itemID, retryRequest)
+}
+
+// RetryOPMLImportItemContext is the context-aware variant of RetryOPMLImportItem.
+func (c *Client) RetryOPMLImportItemContext(ctx context.Context, importID, itemID int64, retryRequest *OPMLImportItemRetryRequest) (*OPMLImport, error) {
+	var payload any
+	if retryRequest != nil {
+		payload = retryRequest
+	}
+
+	body, err := c.request.Post(ctx, fmt.Sprintf("/v1/opml/imports/%d/items/%d/retry", importID, itemID), payload)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	var importBatch OPMLImport
+	if err := json.NewDecoder(body).Decode(&importBatch); err != nil {
+		return nil, fmt.Errorf("miniflux: response error (%v)", err)
+	}
+
+	return &importBatch, nil
 }
 
 // Feed gets a feed.

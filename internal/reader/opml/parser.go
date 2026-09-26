@@ -8,11 +8,55 @@ import (
 	"fmt"
 	"io"
 
+	"miniflux.app/v2/internal/model"
 	"miniflux.app/v2/internal/reader/encoding"
 )
 
 // parse reads an OPML file and returns a list of subscription.
 func parse(data io.Reader) ([]subcription, error) {
+	_, subscriptions, err := parsePlan(data)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]subcription, 0, len(subscriptions))
+	for _, subscription := range subscriptions {
+		result = append(result, frozenToSubcription(subscription))
+	}
+
+	return result, nil
+}
+
+func frozenToSubcription(s model.FrozenOPMLSubscription) subcription {
+	return subcription{
+		Title:                       s.Title,
+		SiteURL:                     s.SiteURL,
+		FeedURL:                     s.FeedURL,
+		CategoryName:                s.CategoryName,
+		Description:                 s.Description,
+		ScraperRules:                s.Settings.ScraperRules,
+		RewriteRules:                s.Settings.RewriteRules,
+		UrlRewriteRules:             s.Settings.UrlRewriteRules,
+		BlocklistRules:              s.Settings.BlocklistRules,
+		KeeplistRules:               s.Settings.KeeplistRules,
+		BlockFilterEntryRules:       s.Settings.BlockFilterEntryRules,
+		KeepFilterEntryRules:        s.Settings.KeepFilterEntryRules,
+		UserAgent:                   s.Settings.UserAgent,
+		Crawler:                     s.Settings.Crawler,
+		IgnoreHTTPCache:             s.Settings.IgnoreHTTPCache,
+		FetchViaProxy:               s.Settings.FetchViaProxy,
+		Disabled:                    s.Settings.Disabled,
+		NoMediaPlayer:               s.Settings.NoMediaPlayer,
+		HideGlobally:                s.Settings.HideGlobally,
+		AllowSelfSignedCertificates: s.Settings.AllowSelfSignedCertificates,
+		DisableHTTP2:                s.Settings.DisableHTTP2,
+		IgnoreEntryUpdates:          s.Settings.IgnoreEntryUpdates,
+	}
+}
+
+// parsePlan reads an OPML file and returns the document title together with
+// the frozen subscription plan in document order.
+func parsePlan(data io.Reader) (string, []model.FrozenOPMLSubscription, error) {
 	opmlDocument := &opmlDocument{}
 	decoder := xml.NewDecoder(data)
 	decoder.Entity = xml.HTMLEntity
@@ -21,10 +65,17 @@ func parse(data io.Reader) ([]subcription, error) {
 
 	err := decoder.Decode(opmlDocument)
 	if err != nil {
-		return nil, fmt.Errorf("opml: unable to parse document: %w", err)
+		return "", nil, fmt.Errorf("opml: unable to parse document: %w", err)
 	}
 
-	return getSubscriptionsFromOutlines(opmlDocument.Outlines, ""), nil
+	subscriptions := getSubscriptionsFromOutlines(opmlDocument.Outlines, "")
+
+	frozen := make([]model.FrozenOPMLSubscription, 0, len(subscriptions))
+	for _, subscription := range subscriptions {
+		frozen = append(frozen, subscription.toFrozen())
+	}
+
+	return opmlDocument.Header.Title, frozen, nil
 }
 
 func getSubscriptionsFromOutlines(outlines opmlOutlineCollection, category string) []subcription {

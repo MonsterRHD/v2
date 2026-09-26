@@ -1,0 +1,21 @@
+项目 project-04｜题目 miniflux-v2-f0104e3c-7618-435f-9569-0729d042bbf6
+Prompt-Rubric 对齐审计：逐条核对冻结 Rubric 与原始中文 Prompt 的场景、目标、失败边界、兼容描述；以下每项引用原 Prompt 已明确的可观察目标。未发现新增接口、文件、错误码、部署或测试夹具门槛。
+P-R 对齐表：
+R1 → Prompt 场景/目标原文“把 OPML 导入改造成可恢复的批次”：首次导入先冻结分类与订阅计划并返回稳定导入标识，格式错误不会留下半个可运行批次。
+R2 → Prompt 场景/目标原文“把 OPML 导入改造成可恢复的批次”：每个计划项记录创建、合并、临时失败或永久失败，状态可查询且与数据库结果对应。
+R3 → Prompt 场景/目标原文“把 OPML 导入改造成可恢复的批次”：同一 OPML 重复提交或同一批次重试不会复制 feed、category，也不会重新处理已成功项。
+R4 → Prompt 场景/目标原文“把 OPML 导入改造成可恢复的批次”：进程在任意项后重启可从持久进度继续；临时抓取失败可显式恢复而不重做成功项。
+R5 → Prompt 场景/目标原文“把 OPML 导入改造成可恢复的批次”：取消批次后不再启动新抓取，已提交项目保留，晚到结果按取消边界确定归属。
+R6 → Prompt 场景/目标原文“把 OPML 导入改造成可恢复的批次”：永久失败项可在修正后按原计划位置重试，并保留其他项目的结果和顺序。
+R7 → Prompt 场景/目标原文“小型同步导入和现有导出格式继续可用”：现有小型同步导入调用和 OPML 导出格式保持兼容。
+R8 → Prompt 场景/目标原文“小型同步导入和现有导出格式继续可用”：完成、部分失败或取消后的汇总数量与实际分类、订阅及失败项逐项一致。
+验证摘要：go test -count=1 ./internal/reader/opml：ok，0.758s。
+逐条比较（按冻结 Rubric 顺序）：
+Rubric ID：1｜状态：通过｜期望行为：首次导入先冻结分类与订阅计划并返回稳定导入标识，格式错误不会留下半个可运行批次。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
+Rubric ID：2｜状态：通过｜期望行为：每个计划项记录创建、合并、临时失败或永久失败，状态可查询且与数据库结果对应。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
+Rubric ID：3｜状态：通过｜期望行为：同一 OPML 重复提交或同一批次重试不会复制 feed、category，也不会重新处理已成功项。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
+Rubric ID：4｜状态：通过｜期望行为：进程在任意项后重启可从持久进度继续；临时抓取失败可显式恢复而不重做成功项。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
+Rubric ID：5｜状态：未通过｜期望行为：取消批次后不再启动新抓取，已提交项目保留，晚到结果按取消边界确定归属。｜实际观察：runImport 检查 ctx 后继续选取下一项并调用 processItem；取消可在检查与调用之间到达。｜直接证据：internal/reader/opml/batch.go:256-289｜原因：runImport 检查 ctx 后继续选取下一项并调用 processItem；取消可在检查与调用之间到达。｜影响：取消提交后仍启动该次新抓取，违反取消边界。｜证据位置：internal/reader/opml/batch.go:256-289
+Rubric ID：6｜状态：通过｜期望行为：永久失败项可在修正后按原计划位置重试，并保留其他项目的结果和顺序。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
+Rubric ID：7｜状态：通过｜期望行为：现有小型同步导入调用和 OPML 导出格式保持兼容。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
+Rubric ID：8｜状态：通过｜期望行为：完成、部分失败或取消后的汇总数量与实际分类、订阅及失败项逐项一致。｜实际观察：go test -count=1 ./internal/reader/opml：ok，0.758s。｜直接证据：internal/reader/opml/batch.go（本条生产实现）；本题可复现命令输出：go test -count=1 ./internal/reader/opml：ok，0.758s。
