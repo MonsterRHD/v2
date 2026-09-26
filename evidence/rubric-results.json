@@ -22,12 +22,12 @@
   {
     "id": 5,
     "passed": false,
-    "reason": "webSessionGenerationMonitor.Refresh 的读取错误分支返回缓存 generation 和 nil error。"
+    "reason": "会话代际刷新函数的读取错误分支返回缓存代际且错误值为空。"
   },
   {
     "id": 6,
     "passed": false,
-    "reason": "数据库服务未启动，多实例数据库代际刷新和通知丢失轮询没有运行验证。"
+    "reason": "数据库服务未运行，多实例代际刷新和通知丢失轮询没有运行验证。"
   },
   {
     "id": 7,
