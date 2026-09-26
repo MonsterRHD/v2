@@ -22,7 +22,7 @@
   {
     "id": 5,
     "passed": false,
-    "reason": "runImport 检查 ctx 后继续选取下一项并调用 processItem；取消可在检查与调用之间到达。"
+    "reason": "导入流程检查取消状态后继续选取下一项并调用单项处理；取消可在检查与调用之间到达。"
   },
   {
     "id": 6,
